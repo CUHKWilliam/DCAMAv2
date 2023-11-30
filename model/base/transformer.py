@@ -6,54 +6,7 @@ import math, copy
 from torch.autograd import Variable
 
 TRAIN = False
-class MultiHeadedAttention(nn.Module):
-    def __init__(self, h, d_model, dropout=0.1):
-        "Take in model size and number of heads."
-        super(MultiHeadedAttention, self).__init__()
-        assert d_model % h == 0
-        # We assume d_v always equals d_k
-        self.d_k = d_model // h
-        self.h = h
-        self.linears = clones(nn.Linear(d_model, d_model), 2)
-        self.attn = None
-        self.dropout = nn.Dropout(p=dropout)
-
-
-    def forward(self, query, key, value, mask=None):
-        if mask is not None:
-            # Same mask applied to all h heads.
-            mask = mask.unsqueeze(1)
-        nbatches = query.size(0)
-        # 1) Do all the linear projections in batch from d_model => h x d_k
-
-        query_dir, key_dir = \
-            [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
-             for l, x in zip([self.linears[0], self.linears[0]], (query, key))]
-        value = value.repeat(self.h, 1, 1).transpose(0, 1).contiguous().unsqueeze(-1)
-        query_norm = self.linears[1](query)[:, :, :self.h].view(nbatches, -1, self.h).transpose(1, 2)
-        key_norm = self.linears[1](key)[:, :, :self.h].view(nbatches, -1, self.h).transpose(1, 2)
-        # query_norm[query_norm < 1.] *= 0.
-        # key_norm[key_norm < 1.] *= 0.
-        if not TRAIN:
-            query_dir = query_dir.detach().cpu()
-            key_dir = key_dir.detach().cpu()
-            query_norm = query_norm.detach().cpu()
-            key_norm = key_norm.detach().cpu()
-            value = value.cpu()
-
-
-        query = query_dir / query_dir.norm(dim=-1).unsqueeze(-1) * 10 * query_norm.unsqueeze(-1)
-        key = key_dir / key_dir.norm(dim=-1).unsqueeze(-1) * 10 * key_norm.unsqueeze(-1)
-
-        # query = query_dir / query_dir.norm(dim=-1).unsqueeze(-1)
-        # key = key_dir / key_dir.norm(dim=-1).unsqueeze(-1)
-
-        # 2) Apply attention on all the projected vectors in batch.
-        x, self.attn = attention(query, key, value, mask=mask, dropout=self.dropout)
-        # x = attention_group_keys(query, key, value, mask=mask, dropout=self.dropout, bank_size=2048)
-        # 3) "Concat" using a view and apply a final linear.
-        return torch.mean(x, -3)
-
+CNT = 0
 
 # class MultiHeadedAttention(nn.Module):
 #     def __init__(self, h, d_model, dropout=0.1):
@@ -67,6 +20,7 @@ class MultiHeadedAttention(nn.Module):
 #         self.attn = None
 #         self.dropout = nn.Dropout(p=dropout)
 #
+#
 #     def forward(self, query, key, value, mask=None):
 #         if mask is not None:
 #             # Same mask applied to all h heads.
@@ -74,20 +28,85 @@ class MultiHeadedAttention(nn.Module):
 #         nbatches = query.size(0)
 #         # 1) Do all the linear projections in batch from d_model => h x d_k
 #
-#         query, key = \
+#         query_dir, key_dir = \
 #             [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
-#              for l, x in zip([self.linears[0], self.linears[1]], (query, key))]
+#              for l, x in zip([self.linears[0], self.linears[0]], (query, key))]
 #         value = value.repeat(self.h, 1, 1).transpose(0, 1).contiguous().unsqueeze(-1)
-#
+#         query_norm = self.linears[1](query)[:, :, :self.h].view(nbatches, -1, self.h).transpose(1, 2)
+#         key_norm = self.linears[1](key)[:, :, :self.h].view(nbatches, -1, self.h).transpose(1, 2)
+#         # query_norm[query_norm < 1.] *= 0.
+#         # key_norm[key_norm < 1.] *= 0.
 #         if not TRAIN:
-#             query = query.detach().cpu()
-#             key = key.detach().cpu()
+#             global CNT
+#             query_dir = query_dir.detach().cpu()
+#             key_dir = key_dir.detach().cpu()
+#             query_norm = query_norm.detach().cpu()
+#             key_norm = key_norm.detach().cpu()
 #             value = value.cpu()
+#
+#             # CNT += 1
+#             # CNT = CNT % 3 + 1
+#             # query_dir = query_dir.to("cuda:{}".format(CNT))
+#             # key_dir = key_dir.to("cuda:{}".format(CNT))
+#             # query_norm = query_norm.to("cuda:{}".format(CNT))
+#             # key_norm = key_norm.to("cuda:{}".format(CNT))
+#             # value = value.to("cuda:{}".format(CNT))
+#
+#         MAX_SHOT = 5
+#         query = query_dir / query_dir.norm(dim=-1).unsqueeze(-1) * 5 * query_norm.unsqueeze(-1)
+#         key_norm_mean = key_norm.mean(1)[0]
+#
+#         # key_dir = key_dir[:, :, key_norm_mean.argsort(descending=True)[:2304 * MAX_SHOT], :]
+#         # value = value[:, :, key_norm_mean.argsort(descending=True)[:2304 * MAX_SHOT], :]
+#         # key_norm = key_norm[:, :, key_norm_mean.argsort(descending=True)[:2304 * MAX_SHOT]]
+#
+#         key = key_dir / key_dir.norm(dim=-1).unsqueeze(-1) * 5 * key_norm.unsqueeze(-1)
+#
+#         # query = query_dir / query_dir.norm(dim=-1).unsqueeze(-1)
+#         # key = key_dir / key_dir.norm(dim=-1).unsqueeze(-1)
+#
 #         # 2) Apply attention on all the projected vectors in batch.
-#         x, self.attn = attention(query, key, value, mask=mask,dropout=self.dropout)
+#         x, self.attn = attention(query, key, value, mask=mask, dropout=self.dropout)
 #         # x = attention_group_keys(query, key, value, mask=mask, dropout=self.dropout, bank_size=2048)
 #         # 3) "Concat" using a view and apply a final linear.
+#
+#         x = x.cuda()
 #         return torch.mean(x, -3)
+
+
+class MultiHeadedAttention(nn.Module):
+    def __init__(self, h, d_model, dropout=0.1):
+        "Take in model size and number of heads."
+        super(MultiHeadedAttention, self).__init__()
+        assert d_model % h == 0
+        # We assume d_v always equals d_k
+        self.d_k = d_model // h
+        self.h = h
+        self.linears = clones(nn.Linear(d_model, d_model), 2)
+        self.attn = None
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, query, key, value, mask=None):
+        if mask is not None:
+            # Same mask applied to all h heads.
+            mask = mask.unsqueeze(1)
+        nbatches = query.size(0)
+        # 1) Do all the linear projections in batch from d_model => h x d_k
+
+        query, key = \
+            [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
+             for l, x in zip([self.linears[0], self.linears[1]], (query, key))]
+        value = value.repeat(self.h, 1, 1).transpose(0, 1).contiguous().unsqueeze(-1)
+
+        if not TRAIN:
+            query = query.detach().cpu()
+            key = key.detach().cpu()
+            value = value.cpu()
+        # 2) Apply attention on all the projected vectors in batch.
+        x, self.attn = attention(query, key, value, mask=mask,dropout=self.dropout)
+        # x = attention_group_keys(query, key, value, mask=mask, dropout=self.dropout, bank_size=2048)
+        # 3) "Concat" using a view and apply a final linear.
+        return torch.mean(x, -3)
 
 class PositionalEncoding(nn.Module):
     "Implement the PE function."
@@ -95,7 +114,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout, max_len=10000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
-
+ 
         # Compute the positional encodings once in log space.
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len).unsqueeze(1)
@@ -147,61 +166,71 @@ def plot_pts(pts, centers):
 #     attn_val = torch.stack(attn_val, dim=0).unsqueeze(-1)
 #     return attn_val
 
-
-from fast_pytorch_kmeans import KMeans
-def attention_group_keys(query, key, value, mask=None, dropout=None, bank_size=2048):
-
-    "Compute 'Scaled Dot Product Attention'"
-    d_k = query.size(-1)
-    batch_size, num_heads, num_v = query.size(0), query.size(1), value.size(2)
-    num_k = key.size(2)
-    attn_val = []
-    for b in range(batch_size):
-        attn_val_b = []
-        for head_idx in range(num_heads):
-            kmeans = KMeans(n_clusters=bank_size, mode='cosine', init_method="kmeans++")
-            key_h = key[b, head_idx, ...]
-            query_h, val_h = query[b, head_idx, ...], value[b, head_idx, ...]
-            pos_mask = val_h.squeeze(-1) > 0
-            val_h_pos, val_h_neg = val_h[pos_mask], val_h[torch.logical_not(pos_mask)]
-            key_h_pos, key_h_neg = key_h[pos_mask], key_h[torch.logical_not(pos_mask)]
-            if key_h_pos.size(0) > bank_size:
-                assignments_pos = kmeans.fit_predict(key_h_pos.detach()).cuda()
-                centroids_pos = kmeans.centroids.cuda()
-            else:
-                assignments_pos = torch.arange(0, len(key_h_pos)).long().cuda()
-                centroids_pos = key_h_pos.clone()
-
-            # torch.cuda.set_device(current_device)
-            # nan_indices = np.where(np.isnan(centroids).any(-1))[0]
-            # mask = torch.from_numpy(np.logical_not(np.in1d(assignments, nan_indices))).bool().cuda()
-            # assignments = torch.from_numpy(assignments.astype(np.int32)).long().cuda()
-            # assignments, key_h, val_h = assignments[mask], key_h[mask], val_h[mask]
-
-            cluster_ids_x_pos = assignments_pos
-            cluster_centers = centroids_pos# [np.logical_not(np.isnan(centroids).any(-1))]
-            # cluster_centers = torch.from_numpy(cluster_centers).float().cuda()
-            val_h2_pos = torch.zeros(centroids_pos.size(0), 1).float().cuda()
-            for ind in range(centroids_pos.size(0)):
-                val_h2_pos[ind] = torch.nan_to_num(torch.mean(val_h_pos[cluster_ids_x_pos == ind], dim=0), nan=0.)
-            key_h2_pos = cluster_centers.cuda()
-            assignments_neg = kmeans.fit_predict(key_h_neg.detach()).cuda()
-            centroids_neg = kmeans.centroids.cuda()
-            cluster_ids_x_neg = assignments_neg
-            cluster_centers = centroids_neg
-            val_h2_neg = torch.zeros(bank_size, 1).float().cuda()
-            for ind in range(bank_size):
-                val_h2_neg[ind] = torch.nan_to_num(torch.mean(val_h_neg[cluster_ids_x_neg == ind], dim=0), nan=0.)
-            key_h2_neg = cluster_centers.cuda()
-            key_h2 = torch.cat((key_h2_pos, key_h2_neg), dim=0)
-            val_h2 = torch.cat((val_h2_pos, val_h2_neg), dim=0)
-            # plot_pts(key_h.detach().cpu().numpy(), key_h2.detach().cpu().numpy())
-            attn_val_h = (F.softmax(torch.matmul(query_h, key_h2.transpose(-2, -1)) / math.sqrt(d_k), dim=-1) * val_h2.permute(1, 0)).sum(-1)
-            attn_val_b.append(attn_val_h)
-        attn_val_b = torch.stack(attn_val_b, dim=0)
-        attn_val.append(attn_val_b)
-    attn_val = torch.stack(attn_val, dim=0).unsqueeze(-1)
-    return attn_val
+# from sklearnex import patch_sklearn, config_context
+# patch_sklearn()
+# from sklearn.cluster import KMeans
+# def attention_group_keys(query, key, value, mask=None, dropout=None, bank_size=2048):
+#
+#     "Compute 'Scaled Dot Product Attention'"
+#     d_k = query.size(-1)
+#     batch_size, num_heads, num_v = query.size(0), query.size(1), value.size(2)
+#     num_k = key.size(2)
+#     attn_val = []
+#     for b in range(batch_size):
+#         attn_val_b = []
+#         for head_idx in range(num_heads):
+#             kmeans = KMeans(n_clusters=bank_size, n_init=10, max_iter=20, verbose=1)
+#             key_h = key[b, head_idx, ...]
+#             query_h, val_h = query[b, head_idx, ...], value[b, head_idx, ...]
+#             pos_mask = val_h.squeeze(-1) > 0
+#             val_h_pos, val_h_neg = val_h[pos_mask], val_h[torch.logical_not(pos_mask)]
+#             key_h_pos, key_h_neg = key_h[pos_mask], key_h[torch.logical_not(pos_mask)]
+#             if key_h_pos.size(0) > bank_size:
+#                 # with config_context(target_offload="gpu:{}".format(torch.cuda.current_device())):
+#                 km = kmeans.fit(key_h_pos.detach().cpu().numpy())
+#                 assignments_pos = torch.from_numpy(km.labels_).cuda()
+#                 centroids_pos = torch.from_numpy(km.cluster_centers_).cuda()
+#             else:
+#                 assignments_pos = torch.arange(0, len(key_h_pos)).long().cuda()
+#                 centroids_pos = key_h_pos.clone()
+#
+#             # torch.cuda.set_device(current_device)
+#             # nan_indices = np.where(np.isnan(centroids).any(-1))[0]
+#             # mask = torch.from_numpy(np.logical_not(np.in1d(assignments, nan_indices))).bool().cuda()
+#             # assignments = torch.from_numpy(assignments.astype(np.int32)).long().cuda()
+#             # assignments, key_h, val_h = assignments[mask], key_h[mask], val_h[mask]
+#
+#             cluster_ids_x_pos = assignments_pos
+#             cluster_centers = centroids_pos# [np.logical_not(np.isnan(centroids).any(-1))]
+#             # cluster_centers = torch.from_numpy(cluster_centers).float().cuda()
+#             val_h2_pos = torch.zeros(centroids_pos.size(0), 1).float().cuda()
+#             for ind in range(centroids_pos.size(0)):
+#                 if len(val_h_pos[cluster_ids_x_pos == ind]) > 0:
+#                     val_h2_pos[ind] = torch.mean(val_h_pos[cluster_ids_x_pos == ind], dim=0)
+#                 else:
+#                     val_h2_pos[ind] = torch.tensor(0.).float().cuda()
+#             key_h2_pos = cluster_centers.float().cuda()
+#             km = kmeans.fit(key_h_neg.detach().cpu())
+#             assignments_neg = torch.from_numpy(km.labels_).cuda()
+#             centroids_neg = torch.from_numpy(km.cluster_centers_).cuda()
+#             cluster_ids_x_neg = assignments_neg
+#             cluster_centers = centroids_neg
+#             val_h2_neg = torch.zeros(bank_size, 1).float().cuda()
+#             for ind in range(bank_size):
+#                 if len(val_h_neg[cluster_ids_x_neg == ind]) > 0:
+#                     val_h2_neg[ind] = torch.mean(val_h_neg[cluster_ids_x_neg == ind], dim=0)
+#                 else:
+#                     val_h2_neg[ind] = torch.tensor(0.).float().cuda()
+#             key_h2_neg = cluster_centers.float().cuda()
+#             key_h2 = torch.cat((key_h2_pos, key_h2_neg), dim=0)
+#             val_h2 = torch.cat((val_h2_pos, val_h2_neg), dim=0)
+#             # plot_pts(key_h.detach().cpu().numpy(), key_h2.detach().cpu().numpy())
+#             attn_val_h = (F.softmax(torch.matmul(query_h, key_h2.transpose(-2, -1)) / math.sqrt(d_k), dim=-1) * val_h2.permute(1, 0)).sum(-1)
+#             attn_val_b.append(attn_val_h)
+#         attn_val_b = torch.stack(attn_val_b, dim=0)
+#         attn_val.append(attn_val_b)
+#     attn_val = torch.stack(attn_val, dim=0).unsqueeze(-1)
+#     return attn_val
 
 
 # def attention(query, key, value, mask=None, dropout=None):
@@ -237,6 +266,7 @@ def attention(query, key, value, mask=None, dropout=None):
     p_attn = F.softmax(scores, dim=-1)
     if dropout is not None:
         p_attn = dropout(p_attn)
+
     value = torch.matmul(p_attn, value).cuda()
     return value, p_attn
 

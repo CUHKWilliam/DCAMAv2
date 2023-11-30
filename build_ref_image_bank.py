@@ -32,7 +32,7 @@ feat_dim = 1024
 root_path = "/research/d6/rshr/xjgao/twl/data/COCO2014"
 img_path = root_path + "/train2014/"
 anno_path = root_path + "/instances_train2014.json"
-cache_path = root_path + "/ref_image_cache_l_1000.pkl"
+cache_path = root_path + "/ref_image_cache_l_100.pkl"
 
 coco = COCO(anno_path)
 cats = coco.loadCats(coco.getCatIds())
@@ -50,7 +50,7 @@ for cat in cats:
         if bbox[2] < 70 or bbox[3] < 70:
             continue
         annos.append(anno)
-    annos = np.random.choice(annos, size=(min(1000, len(annos)),))
+    annos = np.random.choice(annos, size=(min(100, len(annos)),))
     for anno in tqdm(annos):
         img = coco.loadImgs([anno['image_id']])[0]
         im = np.asarray(Image.open(os.path.join(img_path, img["file_name"])))
@@ -73,6 +73,7 @@ for cat in cats:
             "support_img": im_orig,
             "support_mask": mask_orig,
             "support_name": img["file_name"],
+            "class_id": cat_id
         }
         vs.append(v)
 

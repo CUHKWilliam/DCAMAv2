@@ -9,13 +9,16 @@ from common.evaluation import Evaluator
 from common.config import parse_opts
 from common import utils
 from data.dataset import FSSDataset, FSDataset4SAM
-from transformers import SamProcessor
+# from transformers import SamProcessor
 from PIL import Image
 import numpy as np
 import torch.nn.functional as F
-from torchvision import transforms
+# from torchvision import transforms
 import pickle
 import pycocotools.coco as COCO
+
+import os
+os.environ["NCCL_DEBUG"] = "INFO"
 
 # dinov2_vitl14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14')
 # transform1 = transforms.Compose([

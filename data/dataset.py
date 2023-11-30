@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 
 from data.pascal import DatasetPASCAL
-from data.coco import DatasetCOCO, DatasetCOCOWithRef
+from data.coco import DatasetCOCO
 from data.fss import DatasetFSS
 import torch
 
@@ -89,7 +89,7 @@ class FSDataset4SAM:
 
         dataloader = DataLoader(dataset, batch_size=bsz, shuffle=False, sampler=train_sampler, num_workers=nworker,
                                 pin_memory=True,
-                                collate_fn=collate4SAM
+                                # collate_fn=collate4SAM
                                 )
 
         return dataloader

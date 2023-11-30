@@ -1,0 +1,17 @@
+Collecting dpcpp_cpp_rt
+  Downloading dpcpp_cpp_rt-2024.0.0-py2.py3-none-manylinux1_x86_64.whl (6.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.8/6.8 MB 15.5 MB/s eta 0:00:00
+Collecting intel-cmplr-lic-rt==2024.0.0
+  Downloading intel_cmplr_lic_rt-2024.0.0-py2.py3-none-manylinux1_x86_64.whl (19 kB)
+Collecting intel-opencl-rt==2024.0.0
+  Downloading intel_opencl_rt-2024.0.0-py2.py3-none-manylinux1_x86_64.whl (253.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 253.3/253.3 MB 839.7 kB/s eta 0:00:00
+Collecting intel-openmp==2024.0.0
+  Downloading intel_openmp-2024.0.0-py2.py3-none-manylinux1_x86_64.whl (28.6 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 28.6/28.6 MB 3.0 MB/s eta 0:00:00
+Collecting intel-cmplr-lib-rt==2024.0.0
+  Downloading intel_cmplr_lib_rt-2024.0.0-py2.py3-none-manylinux1_x86_64.whl (69.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 69.2/69.2 MB 3.3 MB/s eta 0:00:00
+Requirement already satisfied: tbb==2021.* in /research/d6/rshr/xjgao/anaconda3/envs/DCAMA/lib/python3.7/site-packages (from intel-opencl-rt==2024.0.0->dpcpp_cpp_rt) (2021.11.0)
+Installing collected packages: intel-openmp, intel-cmplr-lic-rt, intel-cmplr-lib-rt, intel-opencl-rt, dpcpp_cpp_rt
+Successfully installed dpcpp_cpp_rt-2024.0.0 intel-cmplr-lib-rt-2024.0.0 intel-cmplr-lic-rt-2024.0.0 intel-opencl-rt-2024.0.0 intel-openmp-2024.0.0

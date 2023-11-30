@@ -10,7 +10,7 @@ from torchvision.models import resnet
 
 from .base.swin_transformer import SwinTransformer
 from model.base.transformer import MultiHeadedAttention, PositionalEncoding
-from transformers import SamProcessor, SamModel, pipeline
+# from transformers import SamProcessor, SamModel, pipeline
 
 class DCAMA(nn.Module):
 
@@ -159,6 +159,70 @@ class DCAMA(nn.Module):
                         for i in range(13):
                             support_feats[i] = self.SAM_feat_heads[i](support_feats[i])
                     n_support_feats.append(support_feats)
+
+            ## TODO:
+            MAX_SHOTS = 100
+            if len(n_support_feats) > MAX_SHOTS:
+                nshot = MAX_SHOTS
+                n_simis = []
+                for i in range(len(n_support_feats)):
+                    n_support_feat = n_support_feats[i]
+                    n_simi = []
+                    for layer_idx in range(len(n_support_feat)):
+                        n_support_feat_l = n_support_feat[layer_idx]
+                        n_simi_l = []
+                        for b in range(len(n_support_feat_l)):
+                            n_support_feat_l_b = n_support_feat_l[b]
+                            query_feat_l_b = query_feats[layer_idx][b]
+                            support_mask_l_b = support_masks[b][i]
+                            coords = torch.stack(torch.where(support_mask_l_b > 0), dim=-1)
+                            ratio = query_feat_l_b.size(-2) / support_mask_l_b.size(-2)
+                            coords = (coords * ratio).floor().long()
+                            support_mask_l_b2 = torch.zeros((query_feat_l_b.size(-2), query_feat_l_b.size(-1))).bool().cuda()
+                            support_mask_l_b2[coords[:, 1], coords[:, 0]] = True
+                            support_mask_l_b = support_mask_l_b2
+                            # import cv2
+                            # support_mask_l_b = torch.from_numpy(cv2.resize(support_mask_l_b.detach().cpu().numpy(), dsize=(query_feat_l_b.size(-2), query_feat_l_b.size(-1)), interpolation=cv2.INTER_LINEAR)).bool().cuda()
+                            # support_mask_l_b = (F.interpolate(support_mask_l_b.unsqueeze(0).unsqueeze(0), (query_feat_l_b.size(-2), query_feat_l_b.size(-1)), mode='bilinear', align_corners=True).squeeze(0).squeeze(0) != 0).bool()
+
+                            # support_vec = n_support_feat_l_b[:, support_mask_l_b].mean(-1)
+                            support_vec = n_support_feat_l_b.view(n_support_feat_l_b.size(0), -1).mean(-1)
+
+                            # query_vec = query_feat_l_b.mean((-2, -1))
+                            simi_inx = (support_vec @ query_feat_l_b.view(query_feat_l_b.size(0), -1)).argmax()
+                            query_vec = query_feat_l_b.view(query_feat_l_b.size(0), -1)[:, simi_inx]
+                            simi = (support_vec * query_vec).sum() / torch.norm(support_vec) / torch.norm(query_vec)
+                            n_simi_l.append(simi)
+                        n_simi_l = torch.stack(n_simi_l, dim=0)
+                        n_simi.append(n_simi_l)
+                    n_simi = torch.stack(n_simi, dim=0)
+                    n_simis.append(n_simi)
+                n_simis = torch.stack(n_simis, dim=0)
+
+                # n_support_feats2 = [[] for _ in range(MAX_SHOTS)]
+                # support_masks2 = []
+                # for i in range(MAX_SHOTS):
+                #     n_support_feats2[i] = [[] for i in range(len(n_support_feats[0]))]
+                #     for layer_idx in range(len(n_support_feats[0])):
+                #         n_support_feats2[i][layer_idx] = [None for _ in range(len(n_support_feats[0][0]))]
+                # for layer_idx in range(len(n_support_feats[0])):
+                #     for b in range(len(n_support_feats[0][0])):
+                #         simi = n_simis[:, layer_idx, b]
+                #         indices = torch.argsort(simi, descending=True)[:MAX_SHOTS]
+                #         for i in range(len(indices)):
+                #             n_support_feats2[i][layer_idx][b] = n_support_feats[indices[i]][layer_idx][b]
+                # for i in range(MAX_SHOTS):
+                #     for layer_idx in range(len(n_support_feats2[0])):
+                #         n_support_feats2[i][layer_idx] = torch.stack(n_support_feats2[i][layer_idx], dim=0)
+                # n_support_feats = n_support_feats2
+                # support_masks = support_masks2
+
+
+                # n_simis = n_simis.max(1)[0][:, 0]
+                n_simis = n_simis.mean(1)[:, 0]
+
+                support_masks = support_masks[:, n_simis.argsort(descending=True)[:MAX_SHOTS], :, :]
+                n_support_feats = [n_support_feats[i] for i in n_simis.argsort(descending=True)[:MAX_SHOTS]]
             logit_mask = self.model(query_feats, n_support_feats, support_masks.clone(), nshot, training=False)
 
         if self.use_original_imgsize:
@@ -166,7 +230,6 @@ class DCAMA(nn.Module):
             logit_mask = F.interpolate(logit_mask, org_qry_imsize, mode='bilinear', align_corners=True)
         else:
             logit_mask = F.interpolate(logit_mask, support_imgs[0].size()[2:], mode='bilinear', align_corners=True)
-
         return logit_mask.argmax(dim=1)
 
     def compute_objective(self, logit_mask, gt_mask):

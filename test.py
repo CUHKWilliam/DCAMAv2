@@ -15,7 +15,7 @@ from common.evaluation import Evaluator
 from common.config import parse_opts
 from common import utils
 from data.dataset import FSSDataset # FSDataset4SAM
-from transformers import SamProcessor
+# from transformers import SamProcessor
 from PIL import Image
 import numpy as np
 import torch.nn.functional as F
@@ -24,43 +24,40 @@ import pickle
 import pycocotools.coco as COCO
 
 
-# dinov2_vitl14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14')
-# transform1 = transforms.Compose([
-#             transforms.Resize(520),
-#             transforms.CenterCrop(518),  # should be multiple of model patch_size
-#             transforms.ToTensor(),
-#             transforms.Normalize(mean=0.5, std=0.2)
-#         ])
-#
-# # processor = SamProcessor.from_pretrained("facebook/sam-vit-base")
-#
-# ref_kvs_path = "/research/d6/rshr/xjgao/twl/data/COCO2014/ref_image_cache_l.pkl"
-# print("a")
-# with open(ref_kvs_path, "rb") as f:
-#     ref_kvs = pickle.load(f)
-# print("b")
-# ks = []
-# vs = []
-# for i in range(len(ref_kvs[0])):
-#     ks.append(ref_kvs[0][i])
-#     vs.append(ref_kvs[1][i])
-# ks = torch.stack(ks, dim=0)
-# coco_test = COCO.COCO("/research/d6/rshr/xjgao/twl/data/COCO2014/instances_val2014.json")
-# imgs = coco_test.loadImgs(coco_test.getImgIds())
-# anns = coco_test.loadAnns(coco_test.getAnnIds())
-# img_names = []
-# for i in range(len(imgs)):
-#     img_names.append(imgs[i]['file_name'])
-# img_names = np.array(img_names)
-#
-# # processor = SamProcessor.from_pretrained("facebook/sam-vit-base")
-#
-# img_size = 384
-# img_mean = [0.485, 0.456, 0.406]
-# img_std = [0.229, 0.224, 0.225]
-# transform = transforms.Compose([transforms.Resize(size=(img_size, img_size)),
-#                             transforms.ToTensor(),
-#                             transforms.Normalize(img_mean, img_std)])
+
+
+ref_kvs_path = "/research/d6/rshr/xjgao/twl/data/COCO2014/ref_image_cache_l_100.pkl"
+print("a")
+with open(ref_kvs_path, "rb") as f:
+    ref_kvs = pickle.load(f)
+print("b")
+ks = []
+vs = []
+class_ids_s = []
+for i in range(len(ref_kvs[0])):
+    ks.append(ref_kvs[0][i])
+    vs.append(ref_kvs[1][i])
+    class_ids_s.append(ref_kvs[1][i]['class_id'])
+
+ks = torch.stack(ks, dim=0)
+class_ids_s = torch.tensor(class_ids_s).long()
+_, class_ids_s = torch.unique(class_ids_s, return_inverse=True)
+coco_test = COCO.COCO("/research/d6/rshr/xjgao/twl/data/COCO2014/instances_val2014.json")
+imgs = coco_test.loadImgs(coco_test.getImgIds())
+anns = coco_test.loadAnns(coco_test.getAnnIds())
+img_names = []
+for i in range(len(imgs)):
+    img_names.append(imgs[i]['file_name'])
+img_names = np.array(img_names)
+
+# processor = SamProcessor.from_pretrained("facebook/sam-vit-base")
+
+img_size = 384
+img_mean = [0.485, 0.456, 0.406]
+img_std = [0.229, 0.224, 0.225]
+transform = transforms.Compose([transforms.Resize(size=(img_size, img_size)),
+                            transforms.ToTensor(),
+                            transforms.Normalize(img_mean, img_std)])
 
 def process_batch4SAM(batch_data, use_query_as_support=False):
     batch_size = len(batch_data)
@@ -110,22 +107,27 @@ def process_batch4SAM(batch_data, use_query_as_support=False):
             xys = torch.stack(torch.where(q_mask.bool())[::-1], dim=-1)
             xy_max, xy_min = xys.max(0)[0], xys.min(0)[0]
             # xy_max, xy_min = torch.min(xy_max + 50, torch.tensor([q_image.shape[1], q_image.shape[0]]).long()), torch.max(xy_min - 50, torch.tensor([0, 0]).long())
-            q_image = Image.fromarray((q_image[xy_min[1]: xy_max[1], xy_min[0]: xy_max[0], :]).astype(np.uint8))
-            img_t = transform1(q_image)
-            with torch.no_grad():
-                features_dict = dinov2_vitl14.forward_features(img_t.unsqueeze(0))
-            features = features_dict['x_norm_patchtokens']
-            q = features[0].mean(0).detach()
-            score = (ks * q).sum(-1) / torch.norm(ks, dim=-1) / torch.norm(q)
+            # q_image = Image.fromarray((q_image).astype(np.uint8))
+            # img_t = transform1(q_image)
+            # with torch.no_grad():
+            #     features_dict = dinov2_vitl14.forward_features(img_t.unsqueeze(0))
+            # features = features_dict['x_norm_patchtokens']
+            # q = features[0].mean(0).detach().cuda()
+            # ks2 = ks[class_ids_s == class_ids[0]].cuda()
+            selected_idx = torch.where(class_ids_s == class_ids[0])[0].tolist()
+            vs2 = [vs[i] for i in selected_idx]
+            import ipdb;ipdb.set_trace()
+            score = (ks2 * q).sum(-1) / torch.norm(ks2, dim=-1) / torch.norm(q)
             # indices = torch.argsort(score, descending=True)[:nshot]
+            indices = torch.arange(len(score)).long()[:nshot]
             score = score[indices]
-            indices = torch.cat([indices[0].unsqueeze(0), indices[torch.logical_and(score > 0.8, torch.logical_not(score == score[0]))]], dim=0)
+            # indices = torch.cat([indices[0].unsqueeze(0), indices[torch.logical_and(score > 0.8, torch.logical_not(score == score[0]))]], dim=0)
             print(len(indices))
             support_imgs_ = []
             support_masks_ = []
             support_names_ = []
             for i, idx in enumerate(indices):
-                v = vs[idx.item()]
+                v = vs2[idx.item()]
                 # if i == 0:
                 #     v['support_img'] = data['orig_query_img']
                 #     v['support_mask'] = data['orig_query_mask'].detach().cpu().numpy()
@@ -138,17 +140,18 @@ def process_batch4SAM(batch_data, use_query_as_support=False):
                                              support_img.size()[-2:], mode='nearest').squeeze()
                 support_masks_.append(support_mask)
                 support_names_.append(v['support_name'])
+
             data['support_names'] = support_names_
             data['support_imgs'] = support_imgs_
             data['support_masks'] = support_masks_
 
-            # import cv2
-            # q_image.save("debug.png")
-            # cv2.imwrite("debug2.png", (q_mask.detach().cpu().numpy() * 255).astype(np.uint8))
-            # Image.fromarray(vs[indices[0]]['support_img']).save("debug3.png", )
-            # cv2.imwrite("debug4.png", (vs[indices[0]]['support_mask'] * 255).astype(np.uint8))
-            # cv2.imwrite("debug5.png", data['orig_query_img'])
-            # import ipdb; ipdb.set_trace()
+            import cv2
+            q_image.save("debug.png")
+            cv2.imwrite("debug2.png", (q_mask.detach().cpu().numpy() * 255).astype(np.uint8))
+            Image.fromarray(vs2[indices[0]]['support_img']).save("debug3.png", )
+            cv2.imwrite("debug4.png", (vs2[indices[0]]['support_mask'] * 255).astype(np.uint8))
+            cv2.imwrite("debug5.png", data['orig_query_img'])
+            import ipdb; ipdb.set_trace()
             # # TODO: end
         support_images = data['support_imgs']
         support_msks = data['support_masks']
@@ -158,6 +161,7 @@ def process_batch4SAM(batch_data, use_query_as_support=False):
         support_names2 = support_ns
         support_masks2 = torch.stack(support_masks2)
         support_images2 = torch.stack(support_images2, dim=0)
+
         support_imgs.append(support_images2)
         support_masks.append(support_masks2)
         support_names.append(support_names2)
@@ -189,6 +193,12 @@ def test(model, dataloader, nshot):
         # batch = process_batch4SAM(batch)
         # 1. forward pass
         batch = utils.to_cuda(batch)
+
+        ## TODO: substitute the first support image by the query image
+        # batch['support_imgs'][:, 0, :, :, :] = batch['query_img']
+        # batch['support_masks'][:, 0, :, :] = batch['query_mask']
+        ## TODO: end
+
         nshot = batch['support_imgs'].size(1)
         pred_mask = model.module.predict_mask_nshot(batch, nshot=nshot)
 

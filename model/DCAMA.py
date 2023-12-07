@@ -161,7 +161,7 @@ class DCAMA(nn.Module):
                     n_support_feats.append(support_feats)
 
             ## TODO:
-            MAX_SHOTS = 100
+            MAX_SHOTS = 50
             if len(n_support_feats) > MAX_SHOTS:
                 nshot = MAX_SHOTS
                 n_simis = []

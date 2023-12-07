@@ -8,72 +8,6 @@ from torch.autograd import Variable
 TRAIN = False
 CNT = 0
 
-# class MultiHeadedAttention(nn.Module):
-#     def __init__(self, h, d_model, dropout=0.1):
-#         "Take in model size and number of heads."
-#         super(MultiHeadedAttention, self).__init__()
-#         assert d_model % h == 0
-#         # We assume d_v always equals d_k
-#         self.d_k = d_model // h
-#         self.h = h
-#         self.linears = clones(nn.Linear(d_model, d_model), 2)
-#         self.attn = None
-#         self.dropout = nn.Dropout(p=dropout)
-#
-#
-#     def forward(self, query, key, value, mask=None):
-#         if mask is not None:
-#             # Same mask applied to all h heads.
-#             mask = mask.unsqueeze(1)
-#         nbatches = query.size(0)
-#         # 1) Do all the linear projections in batch from d_model => h x d_k
-#
-#         query_dir, key_dir = \
-#             [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
-#              for l, x in zip([self.linears[0], self.linears[0]], (query, key))]
-#         value = value.repeat(self.h, 1, 1).transpose(0, 1).contiguous().unsqueeze(-1)
-#         query_norm = self.linears[1](query)[:, :, :self.h].view(nbatches, -1, self.h).transpose(1, 2)
-#         key_norm = self.linears[1](key)[:, :, :self.h].view(nbatches, -1, self.h).transpose(1, 2)
-#         # query_norm[query_norm < 1.] *= 0.
-#         # key_norm[key_norm < 1.] *= 0.
-#         if not TRAIN:
-#             global CNT
-#             query_dir = query_dir.detach().cpu()
-#             key_dir = key_dir.detach().cpu()
-#             query_norm = query_norm.detach().cpu()
-#             key_norm = key_norm.detach().cpu()
-#             value = value.cpu()
-#
-#             # CNT += 1
-#             # CNT = CNT % 3 + 1
-#             # query_dir = query_dir.to("cuda:{}".format(CNT))
-#             # key_dir = key_dir.to("cuda:{}".format(CNT))
-#             # query_norm = query_norm.to("cuda:{}".format(CNT))
-#             # key_norm = key_norm.to("cuda:{}".format(CNT))
-#             # value = value.to("cuda:{}".format(CNT))
-#
-#         MAX_SHOT = 5
-#         query = query_dir / query_dir.norm(dim=-1).unsqueeze(-1) * 5 * query_norm.unsqueeze(-1)
-#         key_norm_mean = key_norm.mean(1)[0]
-#
-#         # key_dir = key_dir[:, :, key_norm_mean.argsort(descending=True)[:2304 * MAX_SHOT], :]
-#         # value = value[:, :, key_norm_mean.argsort(descending=True)[:2304 * MAX_SHOT], :]
-#         # key_norm = key_norm[:, :, key_norm_mean.argsort(descending=True)[:2304 * MAX_SHOT]]
-#
-#         key = key_dir / key_dir.norm(dim=-1).unsqueeze(-1) * 5 * key_norm.unsqueeze(-1)
-#
-#         # query = query_dir / query_dir.norm(dim=-1).unsqueeze(-1)
-#         # key = key_dir / key_dir.norm(dim=-1).unsqueeze(-1)
-#
-#         # 2) Apply attention on all the projected vectors in batch.
-#         x, self.attn = attention(query, key, value, mask=mask, dropout=self.dropout)
-#         # x = attention_group_keys(query, key, value, mask=mask, dropout=self.dropout, bank_size=2048)
-#         # 3) "Concat" using a view and apply a final linear.
-#
-#         x = x.cuda()
-#         return torch.mean(x, -3)
-
-
 class MultiHeadedAttention(nn.Module):
     def __init__(self, h, d_model, dropout=0.1):
         "Take in model size and number of heads."
@@ -86,6 +20,7 @@ class MultiHeadedAttention(nn.Module):
         self.attn = None
         self.dropout = nn.Dropout(p=dropout)
 
+
     def forward(self, query, key, value, mask=None):
         if mask is not None:
             # Same mask applied to all h heads.
@@ -93,20 +28,85 @@ class MultiHeadedAttention(nn.Module):
         nbatches = query.size(0)
         # 1) Do all the linear projections in batch from d_model => h x d_k
 
-        query, key = \
+        query_dir, key_dir = \
             [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
-             for l, x in zip([self.linears[0], self.linears[1]], (query, key))]
+             for l, x in zip([self.linears[0], self.linears[0]], (query, key))]
         value = value.repeat(self.h, 1, 1).transpose(0, 1).contiguous().unsqueeze(-1)
-
+        query_norm = self.linears[1](query)[:, :, :self.h].view(nbatches, -1, self.h).transpose(1, 2)
+        key_norm = self.linears[1](key)[:, :, :self.h].view(nbatches, -1, self.h).transpose(1, 2)
+        # query_norm[query_norm < 1.] *= 0.
+        # key_norm[key_norm < 1.] *= 0.
         if not TRAIN:
-            query = query.detach().cpu()
-            key = key.detach().cpu()
+            global CNT
+            query_dir = query_dir.detach().cpu()
+            key_dir = key_dir.detach().cpu()
+            query_norm = query_norm.detach().cpu()
+            key_norm = key_norm.detach().cpu()
             value = value.cpu()
+
+            # CNT += 1
+            # CNT = CNT % 3 + 1
+            # query_dir = query_dir.to("cuda:{}".format(CNT))
+            # key_dir = key_dir.to("cuda:{}".format(CNT))
+            # query_norm = query_norm.to("cuda:{}".format(CNT))
+            # key_norm = key_norm.to("cuda:{}".format(CNT))
+            # value = value.to("cuda:{}".format(CNT))
+
+        MAX_SHOT = 5
+        query = query_dir / query_dir.norm(dim=-1).unsqueeze(-1) * 5 * query_norm.unsqueeze(-1)
+        key_norm_mean = key_norm.mean(1)[0]
+
+        # key_dir = key_dir[:, :, key_norm_mean.argsort(descending=True)[:2304 * MAX_SHOT], :]
+        # value = value[:, :, key_norm_mean.argsort(descending=True)[:2304 * MAX_SHOT], :]
+        # key_norm = key_norm[:, :, key_norm_mean.argsort(descending=True)[:2304 * MAX_SHOT]]
+
+        key = key_dir / key_dir.norm(dim=-1).unsqueeze(-1) * 5 * key_norm.unsqueeze(-1)
+
+        # query = query_dir / query_dir.norm(dim=-1).unsqueeze(-1)
+        # key = key_dir / key_dir.norm(dim=-1).unsqueeze(-1)
+
         # 2) Apply attention on all the projected vectors in batch.
-        x, self.attn = attention(query, key, value, mask=mask,dropout=self.dropout)
+        x, self.attn = attention(query, key, value, mask=mask, dropout=self.dropout)
         # x = attention_group_keys(query, key, value, mask=mask, dropout=self.dropout, bank_size=2048)
         # 3) "Concat" using a view and apply a final linear.
+
+        x = x.cuda()
         return torch.mean(x, -3)
+
+
+# class MultiHeadedAttention(nn.Module):
+#     def __init__(self, h, d_model, dropout=0.1):
+#         "Take in model size and number of heads."
+#         super(MultiHeadedAttention, self).__init__()
+#         assert d_model % h == 0
+#         # We assume d_v always equals d_k
+#         self.d_k = d_model // h
+#         self.h = h
+#         self.linears = clones(nn.Linear(d_model, d_model), 2)
+#         self.attn = None
+#         self.dropout = nn.Dropout(p=dropout)
+#
+#     def forward(self, query, key, value, mask=None):
+#         if mask is not None:
+#             # Same mask applied to all h heads.
+#             mask = mask.unsqueeze(1)
+#         nbatches = query.size(0)
+#         # 1) Do all the linear projections in batch from d_model => h x d_k
+#
+#         query, key = \
+#             [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
+#              for l, x in zip([self.linears[0], self.linears[1]], (query, key))]
+#         value = value.repeat(self.h, 1, 1).transpose(0, 1).contiguous().unsqueeze(-1)
+#
+#         if not TRAIN:
+#             query = query.detach().cpu()
+#             key = key.detach().cpu()
+#             value = value.cpu()
+#         # 2) Apply attention on all the projected vectors in batch.
+#         x, self.attn = attention(query, key, value, mask=mask,dropout=self.dropout)
+#         # x = attention_group_keys(query, key, value, mask=mask, dropout=self.dropout, bank_size=2048)
+#         # 3) "Concat" using a view and apply a final linear.
+#         return torch.mean(x, -3)
 
 class PositionalEncoding(nn.Module):
     "Implement the PE function."
@@ -114,7 +114,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout, max_len=10000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
- 
+
         # Compute the positional encodings once in log space.
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len).unsqueeze(1)

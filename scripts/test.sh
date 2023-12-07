@@ -6,7 +6,7 @@ python ./test.py --datapath "/research/d6/rshr/xjgao/twl/data" \
                  --backbone swin \
                  --feature_extractor_path "/research/d6/rshr/xjgao/twl/logistic_project/DCAMA/backbones/swin_base_patch4_window12_384_22kto1k.pth" \
                  --logpath "./logs" \
-                 --load "/research/d6/rshr/xjgao/twl/logistic_project/DCAMA/checkpoint/coco-20i/swin_fold2.pt" \
+                 --load "/research/d6/rshr/xjgao/twl/logistic_project/DCAMA/log/train/fold_2_ft_v0_swin/model_30.pt" \
                  --nshot 50
 
 		 # --load "/research/d6/rshr/xjgao/twl/logistic_project/DCAMA/log/train/fold_0_ft_v0/best_model.pt" \
